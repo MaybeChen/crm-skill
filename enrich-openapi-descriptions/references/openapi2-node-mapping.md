@@ -8,37 +8,29 @@
 |---|---|---|
 | `info.description` | 整个服务 | 文档无命中时根据服务上下文推断 |
 | `paths.<path>.<method>.description` | 方法 | 描述该方法执行的业务动作；不要使用请求/响应体模板 |
-| `parameters[]` 且 `in: body` | body parameter | 已有非空通用描述时通常保留 |
-| body schema 的顶层 property | 请求消息包装字段 | 文档无命中时使用 request 固定模板 |
-| `responses.<code>.description` | HTTP/业务响应状态 | 已有非空描述时保留；不要替换为 response params 模板 |
-| response schema 的顶层 property | 响应消息包装字段 | 文档无命中时使用 response 固定模板 |
+| `parameters[]` 且 `in: body` 的 `description` | 完整请求体 | 文档无命中时使用 request 固定模板 |
+| `responses.<code>.description` | 完整响应 | 文档无命中时使用 response 固定模板 |
+| body/response schema 的顶层 property | 消息包装字段 | 作为字段描述，不使用 request/response 固定模板 |
 | `definitions.<name>` | 复用业务对象 | 仅用户范围包含对象描述时补充 |
 | `definitions.<name>.properties.<field>` | 业务字段 | 文档无命中时结合完整上下文推断 |
 
 ## 避免重复描述
 
-请求链路可能同时出现 body parameter、消息包装字段和其引用的业务 definition；响应链路也可能同时出现 response、消息包装字段和 definition。固定 request/response params 模板只写一次。优先级为：
+请求链路可能同时出现 body parameter、消息包装字段和其引用的业务 definition；响应链路也可能同时出现 response、消息包装字段和 definition。固定模板只写在 body parameter 或 status response 的标准 `description`，不复制到包装字段或 definition。已有非空 `description` 时保留文档内容，不用回退模板覆盖。
 
-1. 遵循同一 YAML 中已经形成的约定；
-2. 没有约定时写在 schema 的顶层消息包装字段；
-3. 若没有包装字段，才写在直接承载完整 body schema 的描述扩展键。
+## 描述键
 
-不要覆盖已经非空的 `parameters[].description` 或 `responses.<code>.description`。
-
-## 选择描述键
-
-- 服务和 operation 优先使用标准 `description`。
-- 字段已有空 `x-description-zh` 时补该键，不额外新增 `description`。
-- 字段已有空 `description` 时补该键；若同一字段的 `x-description-zh` 也为空，两个键分别按其项目约定处理，不把英文内容无条件复制到中文键。
-- 字段完全没有描述键时，观察同一父 schema 和全文件的字段惯例。本类文件以 `x-description-zh` 为主时新增 `x-description-zh`。
-- 固定 request/response params 模板是例外：即使目标键为 `x-description-zh`，仍写规定的英文模板。
+- 所有层级统一使用标准 `description`。
+- 已有空 `description` 时补值；目标范围内的节点完全没有 `description` 时新增该键。
+- `x-description-zh` 不属于本任务的描述目标：保持原值，不因其为空而报告缺失，也不把生成内容写入该键。
+- 同一节点同时有 `description` 与 `x-description-zh` 时，只判断和补充 `description`。
 
 ## 对示例结构的具体判断
 
-- `post_SendNotification` 是 operationId，可用于请求/响应模板中的方法名。
-- `reqBody.description` 已经非空，不应覆盖；它不等于 operation description。
-- `SendNotificationReqMsg` 是请求消息包装字段，适合 `The request params of post_SendNotification`。
-- HTTP `200.description` 已经非空，不应覆盖。
-- `SendNotificationRspMsg` 是响应消息包装字段，适合 `The response params of post_SendNotification`。
-- `sender`、`content`、`sendOptions` 等纯 `$ref` property 仍是字段；即使没有现成描述键，也应进入缺失项清单。
-- `attachments.items.x-description-zh` 描述数组元素，而 `attachments.x-description-zh` 描述整个附件数组，两者不能互相替代。
+- `post_Test` 的业务方法名为 `Test`：先去掉 operationId 的 `post_` 前缀。
+- `parameters[].description` 表示完整请求体；为空且文档未命中时使用 `The request params of Test`。
+- `responses.200.description` 表示完整响应；为空且文档未命中时使用 `The response params of Test`。
+- schema 顶层的 `TestReqMsg` / `TestRspMsg` property 是包装字段，不重复使用固定模板。
+- `x-description-zh: ""` 保持不变，不计入待补充数量。
+- `sender`、`content`、`sendOptions` 等纯 `$ref` property 仍是字段；没有 `description` 时应进入缺失项清单。
+- 数组 property 与 `items` 是不同节点；仅在目标范围要求数组元素描述时为 `items` 添加独立的 `description`。

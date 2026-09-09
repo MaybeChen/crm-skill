@@ -1,6 +1,6 @@
 ---
 name: enrich-openapi-descriptions
-description: Enrich Swagger/OpenAPI YAML by locating missing service, operation/method, parameter, response, schema, and field descriptions, grounding additions in supplied Excel, Word, PDF, or other business documents, and applying defined context-based fallbacks when documentation has no match. Use when an agent with computer-use capabilities must reconcile API specifications with one or many source documents, especially when the documents are long, search-heavy, or cannot be loaded into context at once, while preserving YAML structure and distinguishing sourced text from inference.
+description: Enrich Swagger/OpenAPI YAML by locating missing standard description fields for services, operations/methods, request bodies, responses, schemas, and fields, grounding additions in supplied Excel, Word, PDF, or other business documents, and applying defined context-based fallbacks when documentation has no match. Use when an agent with computer-use capabilities must reconcile API specifications with one or many source documents, especially when the documents are long, search-heavy, or cannot be loaded into context at once, while preserving YAML structure, writing descriptions only to the standard description key, and distinguishing sourced text from inference.
 ---
 
 # Enrich OpenAPI Descriptions
@@ -10,11 +10,11 @@ description: Enrich Swagger/OpenAPI YAML by locating missing service, operation/
 ## 工作原则
 
 - 只修改描述性键，除非用户明确要求修正契约。不得改动路径、方法、字段名、类型、必填项、引用、枚举或示例。
-- 优先补全现有空值（`description: ""`、`description:`、`x-description-zh: ""`）；仅在目标对象完全缺少描述键且用户要求覆盖该类对象时新增键。
+- 所有补充内容只写入标准 `description`。补全现有 `description: ""` / `description:`；目标节点完全缺少 `description` 时按范围新增。忽略 `x-description-zh`，不得向其中写值，也不得仅因它为空而认定缺失。
 - 沿 `$ref` 解析字段归属。请求/响应包装层、业务对象和复用 definition 必须分别处理。
 - 文档命中项必须可追溯到文档位置。文档未命中项必须标记为“推断”，并严格采用下述回退规则，不能伪装成文档原文。
 - 保留原 YAML 的格式、引号、键顺序、注释、换行符和编码；优先做最小文本编辑。
-- 默认沿用 YAML 已有描述的语言、术语、句式和详细程度。`x-description-zh` 写中文；`description` 沿用相邻内容的主语言。
+- 默认沿用 YAML 已有 `description` 的语言、术语、句式和详细程度。本类示例使用英文，因此生成英文描述。
 
 ## 流程
 
@@ -30,9 +30,10 @@ description: Enrich Swagger/OpenAPI YAML by locating missing service, operation/
 3. 将结果分为：
    - 服务：通常为 `info.description`；必要时包括 tag 描述。
    - 方法：`paths` 下各 HTTP operation 的 `description` 或约定扩展字段。
-   - 字段：parameters、responses、definitions/schemas 及其嵌套 properties 的描述。
-4. 查看相邻非空描述，确定目标键、语言和风格。若一个文件主要使用 `x-description-zh` 表达字段含义，不要机械新增平行的 `description`；已有哪个空键就补哪个键。`info.description` 和 operation `description` 仍按 Swagger 标准键处理。
-5. 先区分 operation、body parameter、消息包装字段、业务字段、response 和 definition，避免把同一句描述写到多个层级。Swagger 2.0 的节点映射与本例类型的处理方式见 [references/openapi2-node-mapping.md](references/openapi2-node-mapping.md)。若用户仅要求服务、方法和字段，不扩展修改范围。
+   - 请求/响应：body parameter 与 status response 的 `description`。
+   - 字段：definitions/schemas 及其嵌套 properties 的 `description`。
+4. 查看相邻非空 `description`，确定语言、术语和风格；`x-description-zh` 不参与盘点和写入。
+5. 先区分 operation、body parameter、response、schema 和业务字段。Swagger 2.0 的节点映射与本例类型的处理方式见 [references/openapi2-node-mapping.md](references/openapi2-node-mapping.md)。若用户仅要求服务、方法和字段，不扩展修改范围。
 
 ### 2. 建立文档索引，避免整份长文塞入上下文
 
@@ -70,10 +71,10 @@ description: Enrich Swagger/OpenAPI YAML by locating missing service, operation/
 只有在按既定搜索顺序检查所有候选文档后仍找不到对应描述时，才执行以下规则：
 
 1. **服务描述**：结合 `info.title`、tags、paths、operationId、schema 名和已有描述推断服务的核心业务能力。使用一条简洁、具体的描述，不引入上下文无法支持的用户群体、流程、约束或承诺。
-2. **请求/响应体描述**：使用固定英文句式，并以 operationId 作为“请求方法名”；没有 operationId 时使用 YAML 中的 HTTP method 与 path 组合：
+2. **请求/响应体描述**：把固定英文句式写入 body parameter / status response 的 `description`。先从 operationId 去掉开头的 HTTP 方法及紧随的 `_` 或 `-`（例如 `post_Test` → `Test`）；无法得到业务方法名时使用 path 最后一段，再无法确定时才使用 HTTP method 与 path 组合：
    - 请求体：`The request params of {请求方法名}`
    - 响应体：`The response params of {请求方法名}`
-   不添加句号，不翻译模板；该固定模板覆盖 `x-description-zh` 通常写中文的语言约定。将模板写在直接代表完整请求/响应消息的节点，不要自动同时复制到 body parameter、消息包装字段和 response 三层；已有项目约定时遵循约定，否则优先写消息包装字段（例如 `SendNotificationReqMsg` / `SendNotificationRspMsg`）。单个普通字段不得套用该模板。
+   不添加句号，不翻译模板。不要把模板写到 schema 消息包装 property 或普通业务字段。
 3. **字段描述**：根据字段名，并结合完整字段路径、父 schema、所属接口、请求/响应方向、类型、格式、枚举和相邻字段推断。描述业务含义而非仅拆词翻译；不得添加上下文中没有依据的单位、默认值、范围、隐私属性或业务规则。
 
 将所有回退内容在证据表的“来源位置”列记为 `inferred from YAML context`，置信度记为“推断”。如果字段名与上下文仍存在多个合理解释，则不要武断选择，保留空值并列入歧义清单。
@@ -81,7 +82,7 @@ description: Enrich Swagger/OpenAPI YAML by locating missing service, operation/
 ### 5. 最小化编辑并验证
 
 1. 先复制备份或使用版本控制查看差异。
-2. 只替换目标空值或插入明确要求的描述键。描述含 `:`、`#`、引号或换行时使用合法 YAML 引号/块标量。
+2. 只替换或插入标准 `description`，不修改 `x-description-zh`。描述含 `:`、`#`、引号或换行时使用合法 YAML 引号/块标量。
 3. 再次运行盘点脚本，比较补全前后数量。
 4. 使用环境中可用的 YAML/OpenAPI 校验器解析文件；若没有专用校验器，至少检查 diff 和脚本扫描结果。
 5. 检查 `git diff --word-diff` 或等效差异，确认没有非描述字段变化。

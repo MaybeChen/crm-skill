@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inventory empty or absent descriptions in a Swagger/OpenAPI YAML file.
+"""Inventory empty or absent standard descriptions in Swagger/OpenAPI YAML.
 
 This deliberately uses the standard library and scans YAML structure by indentation,
 so it does not reserialize or modify the source file.
@@ -44,7 +44,7 @@ def scan(path: Path) -> list[dict[str, object]]:
         parts = [item[1] for item in stack] + [key]
         nodes[tuple(parts)] = lineno
 
-        if key in {"description", "x-description-zh"} and value.lower() in EMPTY_VALUES:
+        if key == "description" and value.lower() in EMPTY_VALUES:
             parent = parts[-2] if len(parts) > 1 else ""
             if parts[:2] == ["info", "description"]:
                 kind = "service"
@@ -62,16 +62,10 @@ def scan(path: Path) -> list[dict[str, object]]:
 
     existing_paths = {str(item["path"]) for item in found}
 
-    field_description_key = (
-        "x-description-zh"
-        if any(node[-1] == "x-description-zh" and "properties" in node for node in nodes)
-        else "description"
-    )
-
-    def add_absent(parent: tuple[str, ...], kind: str, key: str = "description") -> None:
-        candidate = parent + (key,)
+    def add_absent(parent: tuple[str, ...], kind: str) -> None:
+        candidate = parent + ("description",)
         dotted = ".".join(candidate)
-        has_description = candidate in nodes or parent + ("x-description-zh",) in nodes
+        has_description = candidate in nodes
         if not has_description and dotted not in existing_paths:
             found.append({
                 "line": nodes[parent],
@@ -86,8 +80,10 @@ def scan(path: Path) -> list[dict[str, object]]:
     for node in nodes:
         if len(node) >= 3 and node[0] == "paths" and node[-1].lower() in HTTP_METHODS:
             add_absent(node, "operation")
+        if len(node) >= 5 and node[0] == "paths" and node[-2] == "responses":
+            add_absent(node, "response")
         if len(node) >= 2 and node[-2] == "properties":
-            add_absent(node, "field", field_description_key)
+            add_absent(node, "field")
 
     found.sort(key=lambda item: (int(item["line"]), str(item["path"])))
     return found

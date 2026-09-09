@@ -19,6 +19,10 @@ paths:
   /items:
     post:
       operationId: createItem
+      responses:
+        "200":
+          schema:
+            type: object
 definitions:
   Item:
     type: object
@@ -33,8 +37,9 @@ definitions:
 EXPECTED = {
     ("info.description", True),
     ("paths./items.post.description", False),
-    ("definitions.Item.properties.itemId.x-description-zh", False),
-    ("definitions.Item.properties.itemName.x-description-zh", True),
+    ("paths./items.post.responses.200.description", False),
+    ("definitions.Item.properties.itemId.description", False),
+    ("definitions.Item.properties.itemName.description", False),
 }
 
 
@@ -57,7 +62,7 @@ def main() -> int:
             capture_output=True,
             text=True,
         ).stdout
-        assert len(json.loads(json_output)["items"]) == 4
+        assert len(json.loads(json_output)["items"]) == 5
         markdown_output = subprocess.run(
             [sys.executable, str(script), str(fixture), "--format", "markdown"],
             check=True,

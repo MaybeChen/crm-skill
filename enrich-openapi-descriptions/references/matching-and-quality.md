@@ -41,7 +41,7 @@
 - 请求与响应中的同名字段可有不同含义，不能无条件复用。
 - 状态码响应描述与业务结果区分明确。
 - 包装节点只描述消息结构角色，不冒充内部业务对象。
-- 请求/响应体的回退模板必须分别为 `The request params of {请求方法名}` 和 `The response params of {请求方法名}`；优先用 operationId 替换占位符。
+- 请求/响应体的回退模板必须分别为 `The request params of {请求方法名}` 和 `The response params of {请求方法名}`。请求方法名优先从 operationId 去除 HTTP 方法前缀（如 `post_Test` → `Test`），并将模板只写入 body parameter / status response 的标准 `description`。
 - 推断字段必须结合父级与接口方向消歧，不能只把 camelCase 或 snake_case 拆成自然语言。
 
 ## 长文检查点

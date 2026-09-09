@@ -78,12 +78,12 @@ diff -u test-api.before.yaml test-api.after.yaml
 
 逐项检查：
 
-- diff 只包含 `description` 或 `x-description-zh` 的替换/插入；
+- diff 只包含标准 `description` 的替换/插入；`x-description-zh` 保持不变；
 - 文档命中项的证据位置可实际跳转；
 - 推断项标记为 `inferred from YAML context`；
-- 请求体为 `The request params of <operationId>`；
-- 响应体为 `The response params of <operationId>`；
-- 没有 operationId 时才使用 HTTP method 与 path；
+- 请求体为 `The request params of <方法名>`；
+- 响应体为 `The response params of <方法名>`；
+- 方法名优先从 operationId 去掉 HTTP 方法前缀，无法得到时使用 path 最后一段；
 - 没有杜撰单位、默认值、枚举含义、长度或业务约束；
 - after 的缺失数下降，剩余项全部出现在歧义/冲突清单中。
 
