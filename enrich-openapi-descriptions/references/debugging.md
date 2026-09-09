@@ -15,6 +15,17 @@ python scripts/find_missing_descriptions.py --help
 
 如果命令开头出现 `Could not find platform independent libraries <prefix>`，说明当前 Python 的安装路径、`PYTHONHOME`/`PYTHONPATH` 或标准库可能不一致；这条提示不是 skill 产生的。当前 smoke test 不再使用 `tempfile.TemporaryDirectory`，因此也能避开部分 Windows Python 3.12 环境中 `os` 与 `shutil` 版本不匹配导致的 `_walk_symlinks_as_files` 清理异常。
 
+如果输出是：
+
+```text
+Could not find platform independent libraries <prefix>
+smoke tests passed
+```
+
+则 **skill 的 smoke test 已通过，但 Python 环境并非完全正常**。`smoke tests passed` 只证明扫描器本次的断言和两种 CLI 输出均成功，不能消除 Python 启动时的 `<prefix>` 警告。可以继续调试 skill；在长期使用或运行其他 Python 工具前，仍建议按下述步骤修复环境。
+
+还可以紧接着检查退出码。在 `cmd.exe` 中运行 `echo %ERRORLEVEL%`，在 PowerShell 中运行 `$LASTEXITCODE`；值为 `0` 才表示 smoke test 成功。
+
 若仍出现该提示，在 `cmd.exe` 中运行：
 
 ```bat
