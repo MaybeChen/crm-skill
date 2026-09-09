@@ -72,13 +72,16 @@ $env:PYTHONPATH
 
 ```bash
 python scripts/find_missing_descriptions.py test-api.before.yaml --format json > before.json
+python scripts/find_missing_descriptions.py test-api.before.yaml --include-populated --format json > all-before.json
 python scripts/find_missing_descriptions.py test-api.after.yaml --format json > after.json
+python scripts/find_missing_descriptions.py test-api.after.yaml --include-populated --format json > all-after.json
 diff -u test-api.before.yaml test-api.after.yaml
 ```
 
 逐项检查：
 
 - diff 只包含标准 `description` 的替换/插入；`x-description-zh` 保持不变；
+- `all-before.json` 中的每个非空描述都已与文档核对，需纠正的内容出现在 diff 和证据表中；
 - 文档命中项的证据位置可实际跳转；
 - 推断项标记为 `inferred from YAML context`；
 - 请求体为 `The request params of <方法名>`；

@@ -16,7 +16,7 @@
 
 ## 避免重复描述
 
-请求链路可能同时出现 body parameter、消息包装字段和其引用的业务 definition；响应链路也可能同时出现 response、消息包装字段和 definition。固定模板只写在 body parameter 或 status response 的标准 `description`，不复制到包装字段或 definition。已有非空 `description` 时保留文档内容，不用回退模板覆盖。
+请求链路可能同时出现 body parameter、消息包装字段和其引用的业务 definition；响应链路也可能同时出现 response、消息包装字段和 definition。固定模板只写在 body parameter 或 status response 的标准 `description`，不复制到包装字段或 definition。已有非空 `description` 仍需与权威文档核对：一致则保留，明确错误、过时、不完整或为占位文字时纠正；文档无匹配时不得用回退模板覆盖。
 
 ## 描述键
 

@@ -24,7 +24,7 @@ def unquote(value: str) -> str:
     return value
 
 
-def scan(path: Path) -> list[dict[str, object]]:
+def scan(path: Path, include_populated: bool = False) -> list[dict[str, object]]:
     text = path.read_text(encoding="utf-8-sig")
     stack: list[tuple[int, str]] = []
     found: list[dict[str, object]] = []
@@ -44,7 +44,7 @@ def scan(path: Path) -> list[dict[str, object]]:
         parts = [item[1] for item in stack] + [key]
         nodes[tuple(parts)] = lineno
 
-        if key == "description" and value.lower() in EMPTY_VALUES:
+        if key == "description" and (value.lower() in EMPTY_VALUES or include_populated):
             parent = parts[-2] if len(parts) > 1 else ""
             if parts[:2] == ["info", "description"]:
                 kind = "service"
@@ -54,7 +54,15 @@ def scan(path: Path) -> list[dict[str, object]]:
                 kind = "field-or-schema"
             else:
                 kind = "other"
-            found.append({"line": lineno, "path": ".".join(parts), "parent": parent, "kind": kind, "present": True})
+            found.append({
+                "line": lineno,
+                "path": ".".join(parts),
+                "parent": parent,
+                "kind": kind,
+                "present": True,
+                "empty": value.lower() in EMPTY_VALUES,
+                "value": "" if value.lower() in EMPTY_VALUES else value,
+            })
 
         # Scalars cannot own nested keys, but empty mappings can.
         if value == "" or value in {"{}", "[]"}:
@@ -73,6 +81,8 @@ def scan(path: Path) -> list[dict[str, object]]:
                 "parent": parent[-1],
                 "kind": kind,
                 "present": False,
+                "empty": None,
+                "value": None,
             })
 
     if ("info",) in nodes:
@@ -93,8 +103,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("yaml_file", type=Path)
     parser.add_argument("--format", choices=("json", "markdown"), default="json")
+    parser.add_argument(
+        "--include-populated",
+        action="store_true",
+        help="include non-empty standard descriptions for document reconciliation",
+    )
     args = parser.parse_args()
-    items = scan(args.yaml_file)
+    items = scan(args.yaml_file, include_populated=args.include_populated)
     if args.format == "json":
         print(json.dumps({"file": str(args.yaml_file), "count": len(items), "items": items}, ensure_ascii=False, indent=2))
     else:

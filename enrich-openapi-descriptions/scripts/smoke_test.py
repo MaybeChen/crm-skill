@@ -32,6 +32,9 @@ definitions:
       itemName:
         type: string
         x-description-zh: ""
+      knownField:
+        type: string
+        description: Known description.
 '''
 
 EXPECTED = {
@@ -54,6 +57,11 @@ def main() -> int:
         items = scanner.scan(fixture)
         actual = {(str(item["path"]), bool(item["present"])) for item in items}
         assert actual == EXPECTED, f"unexpected inventory: {actual!r}"
+        all_items = scanner.scan(fixture, include_populated=True)
+        populated = {str(item["path"]): item for item in all_items}
+        known = populated["definitions.Item.properties.knownField.description"]
+        assert known["empty"] is False
+        assert known["value"] == "Known description."
 
         script = Path(__file__).with_name("find_missing_descriptions.py")
         json_output = subprocess.run(
@@ -63,6 +71,16 @@ def main() -> int:
             text=True,
         ).stdout
         assert len(json.loads(json_output)["items"]) == 5
+        all_json_output = subprocess.run(
+            [sys.executable, str(script), str(fixture), "--include-populated", "--format", "json"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+        assert any(
+            item["path"] == "definitions.Item.properties.knownField.description"
+            for item in json.loads(all_json_output)["items"]
+        )
         markdown_output = subprocess.run(
             [sys.executable, str(script), str(fixture), "--format", "markdown"],
             check=True,
