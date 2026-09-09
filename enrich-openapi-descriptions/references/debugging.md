@@ -20,27 +20,29 @@ test-data/
 └── test-doc.pdf        # 也可以是 docx/xlsx
 ```
 
-然后按顺序执行：
+先验证工具：
 
 ```bash
-# 1. 验证工具
 python scripts/smoke_test.py
-
-# 2. 创建只用于编辑的副本
-python scripts/prepare_working_copy.py test-data/test-api.yaml
-
-# 3. 记录运行前的缺失项和全部已有描述
-python scripts/find_missing_descriptions.py test-data/test-api.enriched.yaml --format markdown > before-missing.md
-python scripts/find_missing_descriptions.py test-data/test-api.enriched.yaml --include-populated --format json > before-all.json
 ```
 
-接着在具有 computer use 能力、已安装本 skill 的 Agent 中附加 `test-doc.pdf` 和两个 YAML，并发送：
+接着在具有 computer use 能力、已安装本 skill 的 Agent 中只附加 `test-doc.pdf` 和原始 `test-api.yaml`。**不要手工创建或上传副本；直接发送这一句：**
 
 ```text
-使用 $enrich-openapi-descriptions，根据 test-doc.pdf 校对并补全 test-api.enriched.yaml 中的 description。
-test-api.yaml 是只读原件，禁止修改。文档明确时同时纠正已有 description；文档未命中时按 skill 的回退规则处理。
+使用 $enrich-openapi-descriptions，根据 test-doc.pdf 校对并补全 test-api.yaml 中的 description。
+```
+
+只要 skill 已成功安装、`$enrich-openapi-descriptions` 能被识别，并且 Agent 能访问这两个输入文件，这条短提示词就足够。`test-api.yaml` 在提示词中表示输入对象，不表示允许原地修改；skill 会自动创建 `test-api.enriched.yaml`，然后只编辑副本。创建副本、只改 `description`、校对非空描述、文档未命中回退、证据记录和验证都属于 skill 内部规则，无需每次在提示词中重复。
+
+调试阶段若要额外强调文件保护和观察分类统计，可使用下面的展开版提示词：
+
+```text
+使用 $enrich-openapi-descriptions，根据 test-doc.pdf 校对并补全 test-api.yaml 中的 description。
+请自动创建工作副本，保持 test-api.yaml 不变。文档明确时同时纠正已有 description；文档未命中时按 skill 的回退规则处理。
 输出证据表，分别统计补充、纠正、保留、推断和未解决项。
 ```
+
+如果 Agent 报告找不到 skill，说明调用语法或安装位置有问题；如果找不到 `test-doc.pdf` / `test-api.yaml`，请重新附加文件或使用 Agent 可访问的完整路径。这两类问题与提示词长短无关。正常情况下，Agent 应先报告已创建 `test-api.enriched.yaml`，再开始文档检索和编辑。
 
 Agent 完成后运行：
 
@@ -112,10 +114,10 @@ $env:PYTHONPATH
 7. 两个不同 schema 中都叫 `status`、但含义不同的字段；
 8. 两处互相冲突的字段说明。
 
-使用 `prepare_working_copy.py` 复制 YAML 后，让启用本 skill 的 Agent 执行；提示词中明确原文件只读：
+让启用本 skill 的 Agent 对原始 YAML 执行；副本由 skill 创建：
 
 ```text
-使用 $enrich-openapi-descriptions，根据 test-doc 补全 test-api.enriched.yaml；不得修改原始 test-api.yaml。
+使用 $enrich-openapi-descriptions，根据 test-doc 补全 test-api.yaml；请自动创建工作副本，不得修改原始文件。
 保留证据表，并将文档命中、上下文推断、冲突/歧义留空分别统计。
 ```
 

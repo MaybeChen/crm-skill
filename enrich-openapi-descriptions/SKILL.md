@@ -10,7 +10,7 @@ description: Enrich and correct Swagger/OpenAPI YAML standard description fields
 ## 工作原则
 
 - 只修改描述性键，除非用户明确要求修正契约。不得改动路径、方法、字段名、类型、必填项、引用、枚举或示例。
-- 永远不要直接修改用户提供的原 YAML。先创建工作副本，后续扫描、编辑和验证均针对副本；原文件只读，用于最终 diff。
+- 永远不要直接修改用户提供的原 YAML。收到任务后，由本 skill 先创建工作副本；用户无需预先复制或把副本作为输入。后续扫描、编辑和验证均针对副本；原文件只读，用于最终 diff。
 - 所有补充内容只写入标准 `description`。补全现有 `description: ""` / `description:`；目标节点完全缺少 `description` 时按范围新增。忽略 `x-description-zh`，不得向其中写值，也不得仅因它为空而认定缺失。
 - 非空 `description` 也必须与文档核对。权威文档有明确描述且现值错误、过时、不完整或只是占位文字时，使用文档内容更新；语义一致时保留，避免无意义改写。不得仅凭上下文推断覆盖非空描述。
 - 沿 `$ref` 解析字段归属。请求/响应包装层、业务对象和复用 definition 必须分别处理。
@@ -23,13 +23,15 @@ description: Enrich and correct Swagger/OpenAPI YAML standard description fields
 ### 1. 盘点输入与目标
 
 1. 找到原始 YAML 和所有候选文档，记录文件名、格式、大小、页数或工作表。将原始 YAML 记为只读源文件。
-2. 创建工作副本。默认会生成 `<原文件名>.enriched.yaml`，且目标已存在时拒绝覆盖：
+2. **由 Agent 自动创建工作副本**。默认生成 `<原文件名>.enriched.yaml`，且目标已存在时拒绝覆盖。不要要求用户先运行此命令或提供副本：
 
    ```bash
    python scripts/prepare_working_copy.py api.yaml
    # 或明确指定输出位置
    python scripts/prepare_working_copy.py api.yaml --output work/api.enriched.yaml
    ```
+
+   若默认副本已存在，停止并向用户报告，不覆盖旧结果；只有用户指定新的输出路径后再继续。创建成功后向用户报告副本路径。
 
 3. 后续只使用工作副本，例如：
 
