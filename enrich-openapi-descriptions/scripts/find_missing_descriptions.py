@@ -62,8 +62,14 @@ def scan(path: Path) -> list[dict[str, object]]:
 
     existing_paths = {str(item["path"]) for item in found}
 
-    def add_absent(parent: tuple[str, ...], kind: str) -> None:
-        candidate = parent + ("description",)
+    field_description_key = (
+        "x-description-zh"
+        if any(node[-1] == "x-description-zh" and "properties" in node for node in nodes)
+        else "description"
+    )
+
+    def add_absent(parent: tuple[str, ...], kind: str, key: str = "description") -> None:
+        candidate = parent + (key,)
         dotted = ".".join(candidate)
         has_description = candidate in nodes or parent + ("x-description-zh",) in nodes
         if not has_description and dotted not in existing_paths:
@@ -81,7 +87,7 @@ def scan(path: Path) -> list[dict[str, object]]:
         if len(node) >= 3 and node[0] == "paths" and node[-1].lower() in HTTP_METHODS:
             add_absent(node, "operation")
         if len(node) >= 2 and node[-2] == "properties":
-            add_absent(node, "field")
+            add_absent(node, "field", field_description_key)
 
     found.sort(key=lambda item: (int(item["line"]), str(item["path"])))
     return found
