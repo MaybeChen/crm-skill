@@ -1,0 +1,4 @@
+interface:
+  display_name: "补全 OpenAPI 描述"
+  short_description: "依据 Excel、Word 或 PDF 文档补全 YAML 描述"
+  default_prompt: "使用 $enrich-openapi-descriptions，根据提供的业务文档校对并补全原始 OpenAPI YAML 中的 description；请自动创建并只修改工作副本。"
