@@ -1,5 +1,59 @@
 # 调试与评估指南
 
+## 目录
+
+- [十分钟快速调试](#十分钟快速调试)
+- [1. 先验证工具](#1-先验证工具)
+- [2. 建立最小端到端用例](#2-建立最小端到端用例)
+- [3. 检查产物](#3-检查产物)
+- [4. 定位常见问题](#4-定位常见问题)
+- [5. 压测长文档](#5-压测长文档)
+- [6. 评分表](#6-评分表)
+
+## 十分钟快速调试
+
+在 `enrich-openapi-descriptions` 目录准备：
+
+```text
+test-data/
+├── test-api.yaml       # 原始 YAML
+└── test-doc.pdf        # 也可以是 docx/xlsx
+```
+
+然后按顺序执行：
+
+```bash
+# 1. 验证工具
+python scripts/smoke_test.py
+
+# 2. 创建只用于编辑的副本
+python scripts/prepare_working_copy.py test-data/test-api.yaml
+
+# 3. 记录运行前的缺失项和全部已有描述
+python scripts/find_missing_descriptions.py test-data/test-api.enriched.yaml --format markdown > before-missing.md
+python scripts/find_missing_descriptions.py test-data/test-api.enriched.yaml --include-populated --format json > before-all.json
+```
+
+接着在具有 computer use 能力、已安装本 skill 的 Agent 中附加 `test-doc.pdf` 和两个 YAML，并发送：
+
+```text
+使用 $enrich-openapi-descriptions，根据 test-doc.pdf 校对并补全 test-api.enriched.yaml 中的 description。
+test-api.yaml 是只读原件，禁止修改。文档明确时同时纠正已有 description；文档未命中时按 skill 的回退规则处理。
+输出证据表，分别统计补充、纠正、保留、推断和未解决项。
+```
+
+Agent 完成后运行：
+
+```bash
+# 4. 查看剩余缺失项
+python scripts/find_missing_descriptions.py test-data/test-api.enriched.yaml --format markdown > after-missing.md
+
+# 5. 比较原件和结果（返回 1 表示两个文件有差异，在此处是预期行为）
+git diff --no-index -- test-data/test-api.yaml test-data/test-api.enriched.yaml
+```
+
+通过标准：原件未改变；diff 只涉及 `description`；文档明确的旧描述得到纠正；请求/响应回退模板正确；每次写入都有文档来源或 `inferred from YAML context` 标记。若这五项都满足，再换成真实长文档调试。
+
 ## 1. 先验证工具
 
 从 skill 目录运行：
@@ -10,7 +64,7 @@ python scripts/find_missing_descriptions.py --help
 python scripts/prepare_working_copy.py --help
 ```
 
-两条命令都应以退出码 0 结束。smoke test 会验证服务、方法和字段的空描述或缺失描述能被发现，并验证 JSON 与 Markdown 两种输出。
+三条命令都应以退出码 0 结束。smoke test 会验证副本保护、服务/方法/响应/字段的空描述或缺失描述，以及 JSON 与 Markdown 两种输出。
 
 ### Windows Python 环境提示
 
