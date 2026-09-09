@@ -7,6 +7,7 @@
 ```bash
 python scripts/smoke_test.py
 python scripts/find_missing_descriptions.py --help
+python scripts/prepare_working_copy.py --help
 ```
 
 两条命令都应以退出码 0 结束。smoke test 会验证服务、方法和字段的空描述或缺失描述能被发现，并验证 JSON 与 Markdown 两种输出。
@@ -57,10 +58,10 @@ $env:PYTHONPATH
 7. 两个不同 schema 中都叫 `status`、但含义不同的字段；
 8. 两处互相冲突的字段说明。
 
-复制 YAML 后，让启用本 skill 的 Agent 执行：
+使用 `prepare_working_copy.py` 复制 YAML 后，让启用本 skill 的 Agent 执行；提示词中明确原文件只读：
 
 ```text
-使用 $enrich-openapi-descriptions，根据 test-doc 补全 test-api.yaml。
+使用 $enrich-openapi-descriptions，根据 test-doc 补全 test-api.enriched.yaml；不得修改原始 test-api.yaml。
 保留证据表，并将文档命中、上下文推断、冲突/歧义留空分别统计。
 ```
 
@@ -71,16 +72,17 @@ $env:PYTHONPATH
 运行：
 
 ```bash
-python scripts/find_missing_descriptions.py test-api.before.yaml --format json > before.json
-python scripts/find_missing_descriptions.py test-api.before.yaml --include-populated --format json > all-before.json
-python scripts/find_missing_descriptions.py test-api.after.yaml --format json > after.json
-python scripts/find_missing_descriptions.py test-api.after.yaml --include-populated --format json > all-after.json
-diff -u test-api.before.yaml test-api.after.yaml
+python scripts/find_missing_descriptions.py test-api.yaml --format json > before.json
+python scripts/find_missing_descriptions.py test-api.yaml --include-populated --format json > all-before.json
+python scripts/find_missing_descriptions.py test-api.enriched.yaml --format json > after.json
+python scripts/find_missing_descriptions.py test-api.enriched.yaml --include-populated --format json > all-after.json
+git diff --no-index -- test-api.yaml test-api.enriched.yaml
 ```
 
 逐项检查：
 
 - diff 只包含标准 `description` 的替换/插入；`x-description-zh` 保持不变；
+- 原始 `test-api.yaml` 的内容和哈希保持不变，所有修改只存在于 `test-api.enriched.yaml`；
 - `all-before.json` 中的每个非空描述都已与文档核对，需纠正的内容出现在 diff 和证据表中；
 - 文档命中项的证据位置可实际跳转；
 - 推断项标记为 `inferred from YAML context`；

@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 import find_missing_descriptions as scanner
+import prepare_working_copy as copier
 
 
 FIXTURE = '''swagger: "2.0"
@@ -52,8 +53,20 @@ def main() -> int:
     # modules, which can make TemporaryDirectory cleanup fail after all tests
     # have already passed. A sibling file only needs pathlib.unlink cleanup.
     fixture = Path(__file__).with_name(f".smoke-test-api-{id(scanner)}.yaml")
+    working_copy = Path(__file__).with_name(f".smoke-test-api-{id(scanner)}.enriched.yaml")
     try:
         fixture.write_text(FIXTURE, encoding="utf-8")
+        original_bytes = fixture.read_bytes()
+        created = copier.create_working_copy(fixture, working_copy)
+        assert created == working_copy.resolve()
+        assert working_copy.read_bytes() == original_bytes
+        assert fixture.read_bytes() == original_bytes
+        try:
+            copier.create_working_copy(fixture, working_copy)
+        except FileExistsError:
+            pass
+        else:
+            raise AssertionError("existing working copy should not be overwritten")
         items = scanner.scan(fixture)
         actual = {(str(item["path"]), bool(item["present"])) for item in items}
         assert actual == EXPECTED, f"unexpected inventory: {actual!r}"
@@ -89,6 +102,7 @@ def main() -> int:
         ).stdout
         assert "info.description" in markdown_output
     finally:
+        working_copy.unlink(missing_ok=True)
         fixture.unlink(missing_ok=True)
 
     print("smoke tests passed")

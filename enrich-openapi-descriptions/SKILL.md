@@ -10,6 +10,7 @@ description: Enrich and correct Swagger/OpenAPI YAML standard description fields
 ## 工作原则
 
 - 只修改描述性键，除非用户明确要求修正契约。不得改动路径、方法、字段名、类型、必填项、引用、枚举或示例。
+- 永远不要直接修改用户提供的原 YAML。先创建工作副本，后续扫描、编辑和验证均针对副本；原文件只读，用于最终 diff。
 - 所有补充内容只写入标准 `description`。补全现有 `description: ""` / `description:`；目标节点完全缺少 `description` 时按范围新增。忽略 `x-description-zh`，不得向其中写值，也不得仅因它为空而认定缺失。
 - 非空 `description` 也必须与文档核对。权威文档有明确描述且现值错误、过时、不完整或只是占位文字时，使用文档内容更新；语义一致时保留，避免无意义改写。不得仅凭上下文推断覆盖非空描述。
 - 沿 `$ref` 解析字段归属。请求/响应包装层、业务对象和复用 definition 必须分别处理。
@@ -21,21 +22,29 @@ description: Enrich and correct Swagger/OpenAPI YAML standard description fields
 
 ### 1. 盘点输入与目标
 
-1. 找到 YAML 和所有候选文档，记录文件名、格式、大小、页数或工作表。
-2. 运行：
+1. 找到原始 YAML 和所有候选文档，记录文件名、格式、大小、页数或工作表。将原始 YAML 记为只读源文件。
+2. 创建工作副本。默认会生成 `<原文件名>.enriched.yaml`，且目标已存在时拒绝覆盖：
 
    ```bash
-   python scripts/find_missing_descriptions.py api.yaml --format markdown
-   python scripts/find_missing_descriptions.py api.yaml --include-populated --format json > description-inventory.json
+   python scripts/prepare_working_copy.py api.yaml
+   # 或明确指定输出位置
+   python scripts/prepare_working_copy.py api.yaml --output work/api.enriched.yaml
    ```
 
-3. 将结果分为：
+3. 后续只使用工作副本，例如：
+
+   ```bash
+   python scripts/find_missing_descriptions.py api.enriched.yaml --format markdown
+   python scripts/find_missing_descriptions.py api.enriched.yaml --include-populated --format json > description-inventory.json
+   ```
+
+4. 将结果分为：
    - 服务：通常为 `info.description`；必要时包括 tag 描述。
    - 方法：`paths` 下各 HTTP operation 的 `description` 或约定扩展字段。
    - 请求/响应：body parameter 与 status response 的 `description`。
    - 字段：definitions/schemas 及其嵌套 properties 的 `description`。
-4. 第一条命令盘点缺失项；第二条同时导出非空描述，供文档逐项校对。查看相邻非空 `description`，确定语言、术语和风格；`x-description-zh` 不参与盘点和写入。
-5. 先区分 operation、body parameter、response、schema 和业务字段。Swagger 2.0 的节点映射与本例类型的处理方式见 [references/openapi2-node-mapping.md](references/openapi2-node-mapping.md)。若用户仅要求服务、方法和字段，不扩展修改范围。
+5. 第一条命令盘点缺失项；第二条同时导出非空描述，供文档逐项校对。查看相邻非空 `description`，确定语言、术语和风格；`x-description-zh` 不参与盘点和写入。
+6. 先区分 operation、body parameter、response、schema 和业务字段。Swagger 2.0 的节点映射与本例类型的处理方式见 [references/openapi2-node-mapping.md](references/openapi2-node-mapping.md)。若用户仅要求服务、方法和字段，不扩展修改范围。
 
 ### 2. 建立文档索引，避免整份长文塞入上下文
 
@@ -83,19 +92,19 @@ description: Enrich and correct Swagger/OpenAPI YAML standard description fields
 
 ### 5. 最小化编辑并验证
 
-1. 先复制备份或使用版本控制查看差异。
-2. 只替换或插入标准 `description`，不修改 `x-description-zh`。描述含 `:`、`#`、引号或换行时使用合法 YAML 引号/块标量。
+1. 再次确认编辑目标是工作副本而非原文件；路径相同则立即停止。
+2. 只在工作副本中替换或插入标准 `description`，不修改 `x-description-zh`。描述含 `:`、`#`、引号或换行时使用合法 YAML 引号/块标量。
 3. 再次运行盘点脚本，比较补全前后数量。
 4. 使用 `--include-populated` 导出修改后清单，抽查所有“更新”项确实与权威文档一致。
 5. 使用环境中可用的 YAML/OpenAPI 校验器解析文件；若没有专用校验器，至少检查 diff 和脚本扫描结果。
-6. 检查 `git diff --word-diff` 或等效差异，确认没有非描述字段变化。
+6. 对原文件与工作副本运行 `diff -u original.yaml original.enriched.yaml`（Windows 可用 `git diff --no-index -- original.yaml original.enriched.yaml`），确认没有非描述字段变化，并确认原文件的大小、哈希或内容未改变。
 7. 抽样回查每个 operation，并对所有被纠正的非空描述、推断项、低置信度文档命中、重复名称、OCR 命中和冲突项人工复核。
 
 ## 交付内容
 
 同时交付：
 
-1. 补全后的 YAML。
+1. 补全后的工作副本 YAML；原始 YAML 保持不变。
 2. 简短汇总：服务/方法/字段各补全多少项、仍缺多少项。
 3. 未补全、歧义或冲突清单，注明 YAML 路径、检索过的来源和原因。
 4. 来源清单或证据表；文档命中项回溯到文件及页码、章节、工作表/行，回退项明确标记为 `inferred from YAML context`。
