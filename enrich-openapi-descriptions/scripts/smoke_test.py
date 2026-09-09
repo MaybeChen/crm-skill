@@ -6,7 +6,6 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 import find_missing_descriptions as scanner
@@ -40,8 +39,12 @@ EXPECTED = {
 
 
 def main() -> int:
-    with tempfile.TemporaryDirectory() as directory:
-        fixture = Path(directory) / "api.yaml"
+    # Do not use tempfile.TemporaryDirectory here. Some embedded or partially
+    # relocated Windows Python installations contain mismatched os/shutil
+    # modules, which can make TemporaryDirectory cleanup fail after all tests
+    # have already passed. A sibling file only needs pathlib.unlink cleanup.
+    fixture = Path(__file__).with_name(f".smoke-test-api-{id(scanner)}.yaml")
+    try:
         fixture.write_text(FIXTURE, encoding="utf-8")
         items = scanner.scan(fixture)
         actual = {(str(item["path"]), bool(item["present"])) for item in items}
@@ -62,6 +65,8 @@ def main() -> int:
             text=True,
         ).stdout
         assert "info.description" in markdown_output
+    finally:
+        fixture.unlink(missing_ok=True)
 
     print("smoke tests passed")
     return 0

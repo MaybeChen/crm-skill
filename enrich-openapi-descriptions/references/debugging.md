@@ -11,6 +11,28 @@ python scripts/find_missing_descriptions.py --help
 
 两条命令都应以退出码 0 结束。smoke test 会验证服务、方法和字段的空描述或缺失描述能被发现，并验证 JSON 与 Markdown 两种输出。
 
+### Windows Python 环境提示
+
+如果命令开头出现 `Could not find platform independent libraries <prefix>`，说明当前 Python 的安装路径、`PYTHONHOME`/`PYTHONPATH` 或标准库可能不一致；这条提示不是 skill 产生的。当前 smoke test 不再使用 `tempfile.TemporaryDirectory`，因此也能避开部分 Windows Python 3.12 环境中 `os` 与 `shutil` 版本不匹配导致的 `_walk_symlinks_as_files` 清理异常。
+
+若仍出现该提示，在 `cmd.exe` 中运行：
+
+```bat
+where python
+python -c "import sys, os, shutil; print(sys.executable); print(sys.prefix); print(os.__file__); print(shutil.__file__)"
+set PYTHONHOME
+set PYTHONPATH
+```
+
+在 PowerShell 中可将最后两条替换为：
+
+```powershell
+$env:PYTHONHOME
+$env:PYTHONPATH
+```
+
+`os.py` 与 `shutil.py` 应来自同一个 Python 安装的 `Lib` 目录。若不是，先清除错误的 `PYTHONHOME`/`PYTHONPATH` 或修复 Python 安装，再重新运行 smoke test。
+
 ## 2. 建立最小端到端用例
 
 不要一开始就用真实长文档。准备一个约 2 个接口、10 个字段的 YAML，以及一页 Excel/Word/PDF 测试文档。在测试文档中有意设置：
