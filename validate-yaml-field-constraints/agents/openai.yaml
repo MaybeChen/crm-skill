@@ -1,4 +1,4 @@
 interface:
   display_name: "校验 YAML 字段约束"
-  short_description: "依据长文档精确校验 YAML 字段类型、长度与必填项"
-  default_prompt: "使用 $validate-yaml-field-constraints，根据提供的文档校验并修正 YAML 中字段的 type、maxLength 和复杂类型 required。"
+  short_description: "依据文档和引用链校验 YAML 字段约束，拒绝推测"
+  default_prompt: "使用 $validate-yaml-field-constraints，根据提供的文档和 $ref 引用链校验 YAML 中字段的 type、format、maxLength、enum 和复杂类型 required；没有明确来源时保持不变。"
