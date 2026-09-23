@@ -1,0 +1,4 @@
+interface:
+  display_name: "校验 YAML 字段约束"
+  short_description: "依据文档和引用链校验 YAML 字段约束，拒绝推测"
+  default_prompt: "使用 $validate-yaml-field-constraints，从每个方法的请求体和响应体沿 $ref 生成 request/response 业务字段路径，再根据文档校验 type、format、maxLength、enum 和 required；没有明确来源时保持不变。"
