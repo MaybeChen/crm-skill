@@ -24,21 +24,22 @@ description: Validate and minimally correct field constraints in YAML API or ser
 2. 从方法的请求体和响应体分别开始遍历：
    - 请求体根固定记为 `request`。
    - 响应体根固定记为 `response`；HTTP 状态码作为方法上下文单独记录，不作为字段路径的一段。
-   - 根以下只追加实际业务字段名。`schema`、`properties`、`items`、`definitions`、definition 名和 `$ref` 均不是业务字段，禁止出现在字段路径中。
-3. 遇到 `$ref: "#/definitions/X"` 时透明跳转到 `X` 并继续追加其中的字段名。遇到数组时保留数组字段本身的名称，随后透明进入 `items`；不要向路径添加 `items` 或 `[]`。
-4. 递归展开 definition 中的 `$ref`，同时维护当前遍历链上的引用集合。遇到循环引用时停止该分支并报告；遇到外部引用、损坏引用或无法解析的 JSON Pointer 时保持相关字段不变并报告。
-5. 为每个可达字段生成**业务字段路径**。以示例中的 `post_SendNotification` 为例：
-   - `request.SendNotificationReqMsg.requestHeader.version`
-   - `request.SendNotificationReqMsg.sendNotificationRequest.sender.email`
-   - `request.SendNotificationReqMsg.sendNotificationRequest.receiver.email`
-   - `response.SendNotificationRspMsg.resultHeader.resultCode`
+   - 根以下只追加实际业务字段名。`schema`、`properties`、`items`、`definitions`、definition 名、请求/响应消息类型名和 `$ref` 均不是业务字段，禁止出现在字段路径中。
+3. 先识别并跳过请求体或响应体最外层的**消息类型包装节点**。当根 schema 下的节点只是承载一个复杂消息对象、其名称表示请求/响应消息类型（例如示例中的 `SendNotificationReqMsg`、`SendNotificationRspMsg`），而真正业务字段位于其 `properties` 内时，该名称是类型名而不是字段名，不得加入业务字段路径。不得仅凭 `ReqMsg`/`RspMsg` 后缀机械判断；应同时依据根层级、复杂对象结构以及文档中的消息/对象定义确认。若无法确认它是包装类型名，则保持该路径候选未决，不要擅自跳过或修改相关字段。
+4. 遇到 `$ref: "#/definitions/X"` 时透明跳转到 `X` 并继续追加其中的字段名。遇到数组时保留数组字段本身的名称，随后透明进入 `items`；不要向路径添加 `items` 或 `[]`。
+5. 递归展开 definition 中的 `$ref`，同时维护当前遍历链上的引用集合。遇到循环引用时停止该分支并报告；遇到外部引用、损坏引用或无法解析的 JSON Pointer 时保持相关字段不变并报告。
+6. 为每个可达字段生成**业务字段路径**。以示例中的 `post_SendNotification` 为例，`SendNotificationReqMsg` 和 `SendNotificationRspMsg` 是消息类型名，必须跳过：
+   - `request.requestHeader.version`
+   - `request.sendNotificationRequest.sender.email`
+   - `request.sendNotificationRequest.receiver.email`
+   - `response.resultHeader.resultCode`
    这些路径描述字段在某个方法的请求体或响应体中的唯一业务位置，绝不能写成 `definitions.Sender.properties.email` 或 `paths....schema.properties...`。
-6. 业务字段路径只用于识别和消歧，不等于 YAML 的物理位置。另行记录内部**编辑位置**（例如目标 definition 的 JSON Pointer），仅用于准确修改文件；证据匹配和交付报告以“方法上下文 + 业务字段路径”为主。若约束属于简单数组元素，额外记录“数组元素”节点角色来定位 `items`，但仍不把 `items` 写进业务字段路径。
-7. 将路径对应的节点分类：
+7. 业务字段路径只用于识别和消歧，不等于 YAML 的物理位置。另行记录内部**编辑位置**（例如目标 definition 的 JSON Pointer），仅用于准确修改文件；证据匹配和交付报告以“方法上下文 + 业务字段路径”为主。若约束属于简单数组元素，额外记录“数组元素”节点角色来定位 `items`，但仍不把 `items` 写进业务字段路径。
+8. 将路径对应的节点分类：
    - 简单字段：最终节点为标量，校验 `type`、`format`、`maxLength` 和 `enum`。
    - 复杂类型：最终节点包含 `properties`，或经 `$ref` 指向对象；在实际定义其直接子字段的对象节点校验 `required`。
    - 数组：数组字段自身与其元素字段分开校验。数组元素经 `$ref` 指向对象时，继续生成后代业务字段路径；`items` 为简单类型时，简单类型约束仍写在 `items` 的实际编辑位置。
-8. 同一 definition 被多个方法、方向或父字段引用时，为每个使用位置生成各自的业务字段路径，但它们可能指向同一个编辑位置。只有文档证据明确适用于所有这些使用位置且约束一致时，才修改共享 definition；任一使用语境冲突或无法确认时保持不变并报告。
+9. 同一 definition 被多个方法、方向或父字段引用时，为每个使用位置生成各自的业务字段路径，但它们可能指向同一个编辑位置。只有文档证据明确适用于所有这些使用位置且约束一致时，才修改共享 definition；任一使用语境冲突或无法确认时保持不变并报告。
 
 ### 2. 在长文档中定位证据
 
