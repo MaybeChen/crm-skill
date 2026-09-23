@@ -18,26 +18,27 @@ description: Validate and minimally correct field constraints in YAML API or ser
 
 ## 流程
 
-### 1. 盘点 YAML 并解析引用图
+### 1. 从方法入口构建业务字段路径
 
-1. 识别服务信息，例如 `info.title`、服务名、tags、paths、operationId、schema 名和命名空间。
-2. 为每个待校验字段记录**声明路径**，路径必须包含所有 YAML 层级，并区分 schema、请求/响应、数组元素和嵌套对象。示例：
-   - `definitions.CreateOrder.properties.customer.properties.id`
-   - `paths./orders.post.parameters.body.schema.properties.customer.properties.id`
-   - `definitions.Order.properties.lines.items.properties.id`
-3. 从所有 schema 入口建立引用图。入口至少包括 `definitions`、body parameter 的 `schema`、response 的 `schema`、内联对象以及数组的 `items`：
-   - 对属性节点的 `$ref: "#/definitions/X"`，将**使用路径**记为当前属性路径，将**声明路径**记为 `definitions.X`。
-   - 对数组 `items.$ref`，先在使用路径加入 `items`，再跳转到对应 definition。
-   - 递归解析 definition 内的 `$ref`，同时维护已访问引用集合；遇到循环引用时停止继续展开，但保留引用边，禁止因循环而复制或遗漏定义。
-   - 只解析本文件中能够精确定位的 JSON Pointer。外部引用、损坏引用或无法解析的引用保持不变并报告。
-4. 为每个可达字段同时记录“使用路径 → `$ref` 链 → 声明路径”。例如：
-   `paths./SendNotification.post.parameters[0].schema.properties.SendNotificationReqMsg.properties.sendNotificationRequest → #/definitions/SendNotificationRequest → definitions.SendNotificationRequest.properties.sender → #/definitions/Sender → definitions.Sender.properties.email`。
-5. 将节点分类：
-   - 简单字段：声明节点为标量，校验 `type`、`format`、`maxLength` 和 `enum`。
-   - 复杂类型：声明节点包含 `properties`，或经 `$ref` 指向包含 `properties` 的对象；在真正声明这些子字段的对象节点校验 `required`。
-   - 数组：数组节点自身与 `items` 分开处理。数组元素经 `$ref` 指向对象时，对象约束写在目标 definition；`items` 为简单类型时，只校验 `items` 节点上有文档证据的简单字段约束。
-6. `$ref` 的使用节点与目标 definition 不得合并成同一声明路径。字段约束应修改在实际声明该字段的节点；不得把目标 definition 的 `type`、`format`、`maxLength`、`enum` 或 `required` 复制到 `$ref` 使用节点。
-7. 同一 definition 可被多个接口引用。只有当文档证据明确适用于该公共 definition，或所有使用语境的说明一致时，才修改该 definition；若不同使用语境给出冲突约束，保持 definition 不变并报告冲突，禁止任选一个值。
+1. 识别服务信息以及 `paths` 下的每个方法。为每个方法单独记录 `path + HTTP method + operationId`，不得混合不同方法的字段。
+2. 从方法的请求体和响应体分别开始遍历：
+   - 请求体根固定记为 `request`。
+   - 响应体根固定记为 `response`；HTTP 状态码作为方法上下文单独记录，不作为字段路径的一段。
+   - 根以下只追加实际业务字段名。`schema`、`properties`、`items`、`definitions`、definition 名和 `$ref` 均不是业务字段，禁止出现在字段路径中。
+3. 遇到 `$ref: "#/definitions/X"` 时透明跳转到 `X` 并继续追加其中的字段名。遇到数组时保留数组字段本身的名称，随后透明进入 `items`；不要向路径添加 `items` 或 `[]`。
+4. 递归展开 definition 中的 `$ref`，同时维护当前遍历链上的引用集合。遇到循环引用时停止该分支并报告；遇到外部引用、损坏引用或无法解析的 JSON Pointer 时保持相关字段不变并报告。
+5. 为每个可达字段生成**业务字段路径**。以示例中的 `post_SendNotification` 为例：
+   - `request.SendNotificationReqMsg.requestHeader.version`
+   - `request.SendNotificationReqMsg.sendNotificationRequest.sender.email`
+   - `request.SendNotificationReqMsg.sendNotificationRequest.receiver.email`
+   - `response.SendNotificationRspMsg.resultHeader.resultCode`
+   这些路径描述字段在某个方法的请求体或响应体中的唯一业务位置，绝不能写成 `definitions.Sender.properties.email` 或 `paths....schema.properties...`。
+6. 业务字段路径只用于识别和消歧，不等于 YAML 的物理位置。另行记录内部**编辑位置**（例如目标 definition 的 JSON Pointer），仅用于准确修改文件；证据匹配和交付报告以“方法上下文 + 业务字段路径”为主。若约束属于简单数组元素，额外记录“数组元素”节点角色来定位 `items`，但仍不把 `items` 写进业务字段路径。
+7. 将路径对应的节点分类：
+   - 简单字段：最终节点为标量，校验 `type`、`format`、`maxLength` 和 `enum`。
+   - 复杂类型：最终节点包含 `properties`，或经 `$ref` 指向对象；在实际定义其直接子字段的对象节点校验 `required`。
+   - 数组：数组字段自身与其元素字段分开校验。数组元素经 `$ref` 指向对象时，继续生成后代业务字段路径；`items` 为简单类型时，简单类型约束仍写在 `items` 的实际编辑位置。
+8. 同一 definition 被多个方法、方向或父字段引用时，为每个使用位置生成各自的业务字段路径，但它们可能指向同一个编辑位置。只有文档证据明确适用于所有这些使用位置且约束一致时，才修改共享 definition；任一使用语境冲突或无法确认时保持不变并报告。
 
 ### 2. 在长文档中定位证据
 
@@ -46,15 +47,17 @@ description: Validate and minimally correct field constraints in YAML API or ser
 1. 与 YAML 服务信息对应的服务章节。
 2. 对应 path、operationId、请求/响应对象或 schema 的章节。
 3. 文档明确标为公共、通用、基础对象或数据字典的章节。
-4. 精确字段名，并结合使用路径、完整 `$ref` 链、声明路径和请求/响应方向消歧。
+4. 精确字段名，并结合方法上下文、请求/响应方向、父子字段层级和对象表格消歧。
 
-服务专属章节与公共章节冲突时，不能直接使用服务专属值改写被其他接口复用的公共 definition；仅当修改范围是服务私有声明节点时才采用更具体的说明。其他冲突保持不变并报告。文档中的字段只有在完整层级、所属对象、接口方向和语境均与“使用路径 + `$ref` 链 + 声明路径”一致时才算命中。孤立的同名字段不是证据。
+文档不要求逐字出现 `request.a.b.c` 形式。允许根据章节所属方法、请求/响应表、对象标题、表格层级、父字段和字段名，推断文档行与业务字段路径的对应关系；这里允许推断的是**字段对应关系**，绝不允许推断 `type`、`format`、`maxLength`、`enum` 或 `required` 的值。只有对应关系唯一且文档明确写出待校验值时才能修改。
 
-为每项建立证据记录：使用路径、`$ref` 链、声明路径、YAML 现值、文档值、文档位置、匹配依据、决定。低置信度、冲突或只有同名匹配的项目保持不变。
+服务专属章节与公共章节冲突时，不能直接使用服务专属值改写被其他接口复用的 definition；仅当编辑位置不共享时才采用更具体的说明。其他冲突保持不变并报告。孤立的同名字段、只有字段名而无法确认父级或方向的记录，以及存在多个合理对应路径的记录都不是充分证据。
+
+为每项建立证据记录：方法上下文、业务字段路径、内部编辑位置、YAML 现值、文档值、文档位置、对应依据、决定。低置信度、冲突或无法唯一对应的项目保持不变。
 
 ### 3. 校验简单字段的 `type`
 
-只在文档明确给出类型且字段路径完全匹配时，按下表规范化：
+只在文档明确给出类型且文档记录能唯一对应到业务字段路径时，按下表规范化：
 
 | 文档类型（忽略大小写） | YAML `type` |
 |---|---|
@@ -105,7 +108,7 @@ description: Validate and minimally correct field constraints in YAML API or ser
 
 ### 7. 校验复杂类型的 `required`
 
-1. 沿 `$ref` 到达实际声明复杂对象的节点，在文档对应对象中收集被明确标记为必填的**直接子字段**。
+1. 根据业务字段路径识别复杂对象，再沿 `$ref` 到达实际定义该对象的节点；在文档对应对象中收集被明确标记为必填的**直接子字段**。
 2. 使用 YAML 中子字段的精确键名组成 `required` 数组；不得使用显示名、别名或点路径。
 3. 仅当文档能确定该复杂类型全部直接子字段的必填状态时，才将 `required` 校正为完整集合，包括删除文档明确为非必填的旧成员。
 4. 若文档只明确说明部分字段必填、但无法判断其余字段，则只能安全地补充已确认的必填项，不得删除现有成员。
@@ -119,7 +122,7 @@ description: Validate and minimally correct field constraints in YAML API or ser
 2. 使用可用的 YAML 解析器确认结果可解析；若是 OpenAPI，再使用可用的 OpenAPI 校验器。
 3. 检查 diff，确认只发生有证据支持的 `type`、`format`、`maxLength`、`enum` 和对象级 `required` 变化，且约束写在正确的声明节点。
 4. 搜索最终文件中的 `type: integer`（包括等价的空白和引号形式），确保没有遗留；若该值不在本次证据覆盖范围内，将其报告为待确认，不要在无文档依据时擅自映射。
-5. 对每个修改项反向核对使用路径、完整 `$ref` 链、声明路径和文档位置，重点复核同名字段、嵌套对象、数组元素、复用 definition 和请求/响应重名对象。
+5. 对每个修改项反向核对方法上下文、业务字段路径、内部编辑位置和文档位置，重点复核同名字段、嵌套对象、数组元素、复用 definition 和请求/响应重名对象。
 6. 扫描 `$ref`，确认所有本地引用都可解析，并检查没有把 definition 约束复制到引用节点。无法解析的引用必须进入未修改清单。
 
 ## 交付
@@ -127,7 +130,7 @@ description: Validate and minimally correct field constraints in YAML API or ser
 交付修改后的 YAML 工作副本，并报告：
 
 - `type`、`format`、`maxLength`、`enum`、`required` 各修改多少项。
-- 每项修改的使用路径、`$ref` 链、声明路径、旧值、新值和文档位置。
+- 每项修改的方法上下文、`request...` 或 `response...` 业务字段路径、内部编辑位置、旧值、新值和文档位置。
 - 因无匹配、路径歧义、引用无法解析、无映射、无有效长度、枚举集合不完整、必填集合不完整或来源冲突而保持不变的项目。
 - YAML/OpenAPI 解析、禁止类型扫描和 diff 检查的命令与结果。
 
