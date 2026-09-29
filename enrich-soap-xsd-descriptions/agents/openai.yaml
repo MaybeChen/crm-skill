@@ -1,0 +1,4 @@
+interface:
+  display_name: "Enrich SOAP XSD Descriptions"
+  short_description: "Add sourced bilingual descriptions to SOAP XSD fields"
+  default_prompt: "Use $enrich-soap-xsd-descriptions to enrich every SOAP XSD field in this directory from the supplied source documents."
