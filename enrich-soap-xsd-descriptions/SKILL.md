@@ -31,6 +31,13 @@ description: Add or reconcile bilingual Chinese and English xs:documentation ann
    - 现有中文、英文或无语言标记的 documentation。
 5. 不要把 include/import、消息包装层或类型名擅自写入业务字段路径；这些信息作为独立上下文保存。数组字段保留字段名，不追加 `items` 一类虚构路径段。
 
+#### 识别请求和响应外壳对象
+
+- XSD 中名为 `xxxRequest` 的复杂对象通常是对应方法**整个请求体的外壳对象**；名为 `xxxResponse` 的复杂对象通常是对应方法**整个响应体的外壳对象**。如果实际协议将 `Response` 误拼为 `Resonse` 或使用类似变体，仍按其结构和使用位置识别，不要擅自改名。
+- 外壳对象可能直接来自源文档，也可能是根据接口结构自行创建的协议包装。先在对应服务和方法章节中查找其原文定义；找不到时，不要因为文档未出现同名对象就否定其外壳角色，也不要跨服务搜索同名包装对象。
+- 不能只凭 `Request`/`Response` 后缀判断。必须同时核对它是否位于方法请求/响应入口、是否包裹该方向的全部业务字段，以及 WSDL 消息、element/type 引用关系。若证据仍不足，将其标记为未决。
+- 记录业务字段路径时，将已确认的外壳对象作为请求/响应上下文，而不是业务字段路径的一段。例如 `CreateOrderRequest.customer.id` 记为 `request.customer.id`，`CreateOrderResponse.result.code` 记为 `response.result.code`。外壳对象自身需要描述且文档无原文时，可以基于方法和方向补充“某方法的请求体”或“某方法的响应体”一类说明，并标记为 `inferred from XSD context`；其内部字段仍须逐项按文档匹配或推断。
+
 ### 2. 按服务建立文档检索范围
 
 先读目录、标题、书签、工作表名和表头，再检索目标内容；不要将长文档从头到尾线性读取，也不要一次性把整份长文塞入上下文。
