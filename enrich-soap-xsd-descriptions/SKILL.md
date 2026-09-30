@@ -1,6 +1,6 @@
 ---
 name: enrich-soap-xsd-descriptions
-description: Add or reconcile bilingual Chinese and English xs:documentation annotations for every field declared in SOAP XML Schema (XSD) files, using supplied Word, PDF, Excel, HTML, or text specifications as the primary source and context-based inference only when no explicit description exists. Use when processing a directory tree that contains service-specific XSD subdirectories plus shared root-level schemas, especially when long documents cover several services, identical field names occur in different services or nesting levels, and source evidence must be matched by service, operation, direction, type, and full field path.
+description: Add missing bilingual Chinese and English xs:documentation annotations to a copied working version of SOAP XML Schema (XSD) files without modifying the original inputs or changing any pre-existing bytes, using supplied Word, PDF, Excel, HTML, or text specifications as the primary source and context-based inference only when no explicit description exists. Use when processing a directory tree that contains service-specific XSD subdirectories plus shared root-level schemas, especially when long documents cover several services, identical field names occur in different services or nesting levels, and source evidence must be matched by service, operation, direction, type, and full field path.
 ---
 
 # Enrich SOAP XSD Descriptions
@@ -10,10 +10,12 @@ description: Add or reconcile bilingual Chinese and English xs:documentation ann
 ## 工作边界
 
 - 递归处理目标目录下的 `.xsd` 文件。将服务子目录中的 XSD 视为服务专属协议，将根目录或明确标记为 common/shared/base 的 XSD 视为公共对象。
-- 只修改字段的描述性注解。不得改变字段名、命名空间、类型、引用、出现次数、默认值、固定值、枚举、导入关系或其他契约内容。
+- 只允许增加缺失的字段描述。不得改写或删除已有描述，也不得改变字段名、命名空间、类型、引用、出现次数、默认值、固定值、枚举、导入关系、空白、换行或其他任何内容。
 - 将 `xs:element` 和 `xs:attribute` 的声明视为字段；同时覆盖全局字段、局部字段、匿名复杂类型中的字段和数组元素声明。不要把 `xs:complexType`、`xs:simpleType`、`xs:sequence` 等类型或结构节点误计为字段，除非用户明确要求描述类型。
-- 保留原文件的编码、换行、缩进、命名空间前缀、注释和节点顺序。模式可能使用 `xsd:` 或其他前缀，不要强制改成 `xs:`。
-- 除非用户明确要求原地修改，否则先复制整个目录为不覆盖已有路径的工作副本；后续编辑和验证只针对副本，原目录保持不变。
+- **绝对禁止修改输入文件。** 开始处理前必须复制完整输入目录，后续扫描以原目录为基准，所有写入只发生在副本中；即使用户要求原地修改，也先明确告知本 skill 只交付副本。
+- 默认将副本创建为输入目录同级的 `<输入目录名>.enriched`；用户可指定其他输出路径。输出路径已存在时立即停止并报告，禁止覆盖、合并或复用旧副本。复制时保留目录结构、文件名、权限和符号链接语义，使相对 import/include 继续有效。
+- 复制完成、编辑开始前，记录原目录所有文件的相对路径、大小和 SHA-256；交付前重新计算并逐项比较，必须证明原输入没有变化。
+- 保留输入文件的编码、BOM、换行、缩进、空白、命名空间前缀、注释和节点顺序。模式可能使用 `xsd:` 或其他前缀，不要强制改成 `xs:`。禁止使用会序列化、重排或格式化整个 XML 的写回方式；解析器只用于读取和验证，写入采用定位明确的最小文本插入。
 - 不得因为字段同名就复用描述。匹配单位是“服务 + 操作 + 请求/响应 + 类型链 + 完整字段路径”。
 
 ## 工作流程
@@ -85,8 +87,8 @@ description: Add or reconcile bilingual Chinese and English xs:documentation ann
 
 - 字段已有 `xs:annotation` 时复用它；XSD 同一声明通常只允许一个 annotation，不要新增第二个。
 - 保留 annotation 中的 `xs:appinfo`、其他语言 documentation 和注释。缺少 `zh` 或 `en` 时只补缺少项。
-- 若已有 `zh-CN`、`zh_CN`、`en-US` 等语言标签，先按项目约定判断是否等价；不要制造语义重复。用户要求精确的 `zh`/`en` 时再规范化。
-- 非空现有描述也要与权威文档核对。文档明确表明现值错误、过时或不完整时更新；语义一致时保留，避免无意义改写。不得用推断覆盖非空描述。
+- 若已有 `zh-CN`、`zh_CN`、`en-US` 等语言标签，按项目约定判断是否等价，避免制造语义重复；不得改名、删除或规范化已有语言标签。
+- 非空现有描述一律保持原字节不变。即使权威文档与之不一致，也只在证据表中报告冲突，不得更正、补写或规范化已有文本。
 - 使用 CDATA 包裹描述。描述包含 `]]>` 时，将其安全拆分为相邻 CDATA 段，保证 XML 合法且解析后的文本不变。
 - 模仿所在文件的缩进和换行，不要为了插入注解而格式化整个 XML。
 - 对通过 `ref` 使用的字段，优先在实际声明处写一次，不要在每个引用点复制描述。若同一共享声明在不同使用路径含义不同，报告建模冲突，不要写入误导性的统一描述。
@@ -108,8 +110,10 @@ description: Add or reconcile bilingual Chinese and English xs:documentation ann
 2. 在依赖文件齐全时编译每个 schema，确认 annotation 的位置与数量符合 XSD 语法；缺少外部 import 时区分环境限制与本次修改错误。
 3. 重新盘点全部字段，统计：文档命中、上下文推断、保留现值、冲突/歧义、缺少中文、缺少英文。
 4. 检查每个新写入的 documentation 都带正确的 `xml:lang`，CDATA 可解析，并且没有重复 annotation。
-5. 比较原目录与工作副本，确认差异仅为目标字段的 annotation/documentation；检查 import/include 路径和文件编码未改变。
+5. 比较原目录与工作副本。允许的 diff 只有在缺失描述的字段中插入新的 `annotation`，或在既有 `annotation` 中插入缺失的 `documentation`；任何替换、删除、整行重排、尾随空白变化或非描述差异都视为失败，必须撤销并改用更小的文本插入重新处理。
 6. 从每个服务至少抽查一个请求、一个响应、一个嵌套同名字段和一个公共对象，并从 XSD 反向回查文档位置。
+7. 重新计算原输入的 SHA-256 清单并与编辑前清单比较；只要有一个原文件发生变化，就不得交付结果。
+8. 对每个有差异的 XSD 做“仅插入”校验：从副本中按证据表精确移除本次新增的 annotation/documentation 字节后，结果必须与原文件逐字节相同。无法还原为完全相同字节流时，视为修改了描述以外的内容，不得交付。
 
 可优先使用 `xmllint --noout` 做格式检查，并用支持 XML Schema 1.0/1.1 的可用解析器编译 schema。不要仅以 XML 格式正确替代 XSD 语义验证。
 
@@ -117,7 +121,7 @@ description: Add or reconcile bilingual Chinese and English xs:documentation ann
 
 同时交付：
 
-1. 补全后的 XSD 工作目录，并明确说明原目录是否保持不变；
+1. 补全后的 XSD 副本目录，以及原输入编辑前后 SHA-256 清单一致的确认；不得将原目录作为交付结果；
 2. 按服务和文件统计的字段总数、文档命中数、推断数、保留数和未决数；
 3. 可追溯的证据表；
 4. 冲突、歧义、断开的引用、循环引用和缺失外部依赖清单；
